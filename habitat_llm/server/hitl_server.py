@@ -191,12 +191,23 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for real-time human-AI collaboration"""
     await websocket.accept()
 
-    # Load config
-    # TODO: Make this configurable per session
-    config = OmegaConf.load("habitat_llm/conf/baselines/decentralized_zero_shot_react_summary.yaml")
-
+    # Load config using Hydra composition
+    from hydra import initialize_config_dir, compose
+    from hydra.core.global_hydra import GlobalHydra
+    
+    # Clear any existing Hydra instance
+    GlobalHydra.instance().clear()
+    
+    # Initialize Hydra with the config directory
+    config_dir = os.path.abspath("habitat_llm/conf")
+    with initialize_config_dir(version_base=None, config_dir=config_dir):
+        # Compose the config
+        config = compose(config_name="baselines/decentralized_zero_shot_react_summary")
+    
     # Override with custom model path if provided
     model_path = os.getenv("PARTNR_MODEL_PATH", "models/iteration_0")
+    OmegaConf.set_struct(config, False)  # Allow setting new keys
+    config.evaluation.agents.agent_0.planner.plan_config.llm.generation_params.engine = model_path
     config.evaluation.agents.agent_1.planner.plan_config.llm.generation_params.engine = model_path
 
     # Create session
