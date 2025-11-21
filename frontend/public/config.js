@@ -1,2 +1,2 @@
-// Replace with your actual Lambda IP address
-window.LAMBDA_WS_URL = 'ws://YOUR-LAMBDA-IP:8000';
+// Lambda instance IP address
+window.LAMBDA_WS_URL = 'ws://104.171.202.238:8000';
