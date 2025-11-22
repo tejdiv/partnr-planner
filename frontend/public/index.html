@@ -191,6 +191,7 @@
         let ws = null;
         let sessionId = 'user_' + Math.random().toString(36).substr(2, 9);
         let episodesCompleted = 0;
+        let pendingImageUpdate = null; // Track when we expect binary image data
 
         function connect() {
             // Use configured URL or prompt user
@@ -202,8 +203,9 @@
             if (!serverUrl.startsWith('ws://') && !serverUrl.startsWith('wss://')) {
                 serverUrl = `ws://${serverUrl}`;
             }
-            
+
             ws = new WebSocket(`${serverUrl}/ws/${sessionId}`);
+            ws.binaryType = 'arraybuffer'; // Enable binary frame handling
 
             ws.onopen = () => {
                 document.getElementById('status').textContent = 'Connected ✓';
@@ -213,14 +215,25 @@
             };
 
             ws.onmessage = (event) => {
+                // Handle binary image data
+                if (event.data instanceof ArrayBuffer) {
+                    const blob = new Blob([event.data], { type: 'image/jpeg' });
+                    const imageUrl = URL.createObjectURL(blob);
+
+                    // Revoke old URL to prevent memory leak
+                    const viewport = document.getElementById('viewport');
+                    if (viewport.src && viewport.src.startsWith('blob:')) {
+                        URL.revokeObjectURL(viewport.src);
+                    }
+
+                    viewport.src = imageUrl;
+                    return;
+                }
+
+                // Handle JSON metadata
                 const data = JSON.parse(event.data);
 
                 if (data.type === 'init' || data.type === 'step') {
-                    // Update viewport
-                    if (data.rgb) {
-                        document.getElementById('viewport').src = 'data:image/jpeg;base64,' + data.rgb;
-                    }
-
                     // Update instruction
                     if (data.instruction) {
                         document.getElementById('instruction-text').textContent = data.instruction;
@@ -236,6 +249,8 @@
                             document.getElementById('ai-action').textContent = data.state.ai_action;
                         }
                     }
+
+                    // Note: Binary image will arrive in next message if has_image is true
                 }
 
                 if (data.type === 'episode_complete') {
