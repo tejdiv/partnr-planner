@@ -107,11 +107,10 @@ class SimSession:
 
                 # Run planner in thread
                 # ai_planner is already a callable (functools.partial), call it directly
+                # It's pre-configured, so just pass observations
                 ai_action = await asyncio.to_thread(
                     self.ai_planner,
-                    obs_1,
-                    self.env.env.env.env._env.current_episode,
-                    agent_uid=1
+                    obs_1
                 )
                 
                 # Put in queue
