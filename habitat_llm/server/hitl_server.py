@@ -148,12 +148,13 @@ class SimSession:
             self._save_episode()
 
         # Reset for new episode
+        current_ep = self.env.env.env.env._env.current_episode
         self.episode_data = {
             "episode": {
-                "episode_id": self.env.current_episode.episode_id,
-                "scene_id": self.env.current_episode.scene_id,
-                "instruction": self.env.current_episode.instruction,
-                "start_position": list(self.env.current_episode.start_position),
+                "episode_id": current_ep.episode_id,
+                "scene_id": current_ep.scene_id,
+                "instruction": getattr(current_ep, "instruction", ""),
+                "start_position": list(getattr(current_ep, "start_position", [0, 0, 0])),
             },
             "frames": [],
             "session": self.episode_data.get("session", {})
