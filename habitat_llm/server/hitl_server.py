@@ -313,12 +313,17 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     # Create session
     if session_id not in active_sessions:
         try:
+            # Send status message to keep connection alive during initialization
+            await websocket.send_json({"type": "status", "message": "Initializing simulator..."})
             active_sessions[session_id] = SimSession(session_id, config)
         except Exception as e:
             print(f"Error creating session: {e}")
             import traceback
             traceback.print_exc()
-            await websocket.send_json({"type": "error", "message": str(e)})
+            try:
+                await websocket.send_json({"type": "error", "message": str(e)})
+            except:
+                pass
             await websocket.close()
             return
 
@@ -347,15 +352,19 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
         # Send JSON metadata
         current_ep = session.env.env.env.env._env.current_episode
-        await websocket.send_json({
-            "type": "init",
-            "instruction": getattr(current_ep, "instruction", ""),
-            "session_id": session_id,
-            "has_image": rgb_img is not None
-        })
-        # Send binary image
-        if rgb_img is not None:
-            await websocket.send_bytes(rgb_jpeg)
+        try:
+            await websocket.send_json({
+                "type": "init",
+                "instruction": getattr(current_ep, "instruction", ""),
+                "session_id": session_id,
+                "has_image": rgb_img is not None
+            })
+            # Send binary image
+            if rgb_img is not None:
+                await websocket.send_bytes(rgb_jpeg)
+        except Exception as e:
+            print(f"Failed to send init message (client may have disconnected): {e}")
+            return
 
         # Main loop
         while True:
