@@ -104,12 +104,12 @@ class SimSession:
                 # Let's grab obs here (fast) then plan (slow).
                 full_obs = self.env.get_observations()
                 obs_1 = self.env.filter_obs_space(full_obs, 1)
-                
+
                 # Run planner in thread
                 ai_action = await asyncio.to_thread(
                     self.ai_planner.plan,
                     obs_1,
-                    self.env.current_episode,
+                    self.env.env.env.env._env.current_episode,
                     agent_uid=1
                 )
                 
@@ -238,11 +238,12 @@ class SimSession:
 
         rgb_jpeg = self._encode_image(rgb_img)
 
+        current_ep = self.env.env.env.env._env.current_episode
         return {
             "rgb": rgb_jpeg,
             "state": {
                 "task_progress": info.get("task_percent_complete", 0.0),
-                "instruction": self.env.current_episode.instruction,
+                "instruction": getattr(current_ep, "instruction", ""),
                 "agent_0_position": info.get("agent_0_position", [0, 0, 0]),
                 "agent_1_position": info.get("agent_1_position", [0, 0, 0]),
                 "ai_action": f"{ai_action[0]}[{ai_action[1]}]" if ai_action[1] else ai_action[0]
@@ -344,9 +345,10 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             rgb_jpeg = b''
 
         # Send JSON metadata
+        current_ep = session.env.env.env.env._env.current_episode
         await websocket.send_json({
             "type": "init",
-            "instruction": session.env.current_episode.instruction,
+            "instruction": getattr(current_ep, "instruction", ""),
             "session_id": session_id,
             "has_image": rgb_img is not None
         })
