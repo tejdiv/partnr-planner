@@ -140,8 +140,8 @@ class SimSession:
                 self.ai_action_queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
-                
-        obs = self.env.reset(self.current_episode_idx)
+
+        obs = self.env.reset_environment()
 
         # Save previous episode if any data
         if len(self.episode_data["frames"]) > 0:
