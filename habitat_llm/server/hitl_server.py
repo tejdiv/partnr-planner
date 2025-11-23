@@ -70,7 +70,7 @@ class SimSession:
             "session": {
                 "session_id": session_id,
                 "start_time": datetime.now().isoformat(),
-                "config": OmegaConf.to_container(config, resolve=True)
+                "config": OmegaConf.to_container(config, resolve=False)
             }
         }
 
