@@ -106,8 +106,9 @@ class SimSession:
                 obs_1 = self.env.filter_obs_space(full_obs, 1)
 
                 # Run planner in thread
+                # ai_planner is already a callable (functools.partial), call it directly
                 ai_action = await asyncio.to_thread(
-                    self.ai_planner.plan,
+                    self.ai_planner,
                     obs_1,
                     self.env.env.env.env._env.current_episode,
                     agent_uid=1
