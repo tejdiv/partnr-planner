@@ -24,6 +24,7 @@ from PIL import Image
 
 from habitat_llm.agent.env import EnvironmentInterface, register_actions, register_measures, register_sensors
 from habitat_llm.agent.env.dataset import CollaborationDatasetV0
+from habitat_llm.utils.sim import init_agents
 
 app = FastAPI()
 
@@ -54,10 +55,19 @@ class SimSession:
         self.dataset = CollaborationDatasetV0(config.habitat.dataset)
         self.env = EnvironmentInterface(config, dataset=self.dataset)
 
+        # Initialize agents
+        agents = init_agents(config.evaluation.agents, self.env)
+        self.agents = {agent.uid: agent for agent in agents}
+
         # Initialize AI planner for agent 1
-        self.ai_planner = hydra.utils.instantiate(
+        # First instantiate creates a partial with plan_config bound
+        planner_partial = hydra.utils.instantiate(
             config.evaluation.agents.agent_1.planner
         )
+        # Then call with env_interface to fully instantiate the planner
+        self.ai_planner = planner_partial(env_interface=self.env)
+        # Assign agent 1 to the planner
+        self.ai_planner.agents = [self.agents[1]]
 
         # Recording
         self.recording_dir = Path(f"data/hitl_sessions/{session_id}")
@@ -92,34 +102,40 @@ class SimSession:
         self.running = True
         while self.running:
             try:
-                # Get observations for AI (Agent 1)
-                # We need to be careful about thread safety here. 
-                # The env is being stepped in another thread.
-                # Ideally, we should get obs from the main thread or lock.
-                # For now, we'll assume get_observations is safe enough or we'll grab it 
-                # before the step? No, AI loop runs independently.
-                
-                # We'll run the planning in a thread to avoid blocking the event loop
-                # But we need to pass the CURRENT observations.
-                # Let's grab obs here (fast) then plan (slow).
+                # Get current episode instruction
+                current_ep = self.env.env.env.env._env.current_episode
+                instruction = getattr(current_ep, "instruction", "")
+
+                # Get observations
                 full_obs = self.env.get_observations()
-                obs_1 = self.env.filter_obs_space(full_obs, 1)
+
+                # Get world graph from environment
+                world_graph = self.env.world_graph
 
                 # Run planner in thread
-                # ai_planner is already a callable (functools.partial), call it directly
-                # It's pre-configured, so just pass observations
-                ai_action = await asyncio.to_thread(
-                    self.ai_planner,
-                    obs_1
+                # Call get_next_action() with instruction, observations, and world_graph
+                low_level_actions, planner_info, is_done = await asyncio.to_thread(
+                    self.ai_planner.get_next_action,
+                    instruction,
+                    full_obs,
+                    world_graph
                 )
-                
+
+                # Extract action for agent 1 (if available)
+                # low_level_actions is a dict mapping agent_uid to action tuple
+                if 1 in low_level_actions:
+                    ai_action = low_level_actions[1]
+                else:
+                    # No action planned, use Wait as fallback
+                    ai_action = ("Wait", None)
+
                 # Put in queue
                 # If queue is full, we wait. This throttles the AI to the physics speed.
                 await self.ai_action_queue.put(ai_action)
-                
+
                 # Small sleep to yield control if planner is super fast
                 await asyncio.sleep(0.01)
-                
+
             except Exception as e:
                 print(f"Error in AI loop: {e}")
                 import traceback
@@ -140,6 +156,9 @@ class SimSession:
                 self.ai_action_queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
+
+        # Reset planner state
+        self.ai_planner.reset()
 
         obs = self.env.reset_environment()
 

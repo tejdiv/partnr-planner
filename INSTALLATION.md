@@ -2,6 +2,29 @@
 
 ### Requirements:
 - Conda or Mamba
+sudo apt-get update && sudo apt-get install -y git wget unzip build-essential
+
+# 2. Download Miniconda
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+
+# 3. Install Miniconda (Press Enter/Yes when prompted)
+bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda
+
+# 4. Initialize Conda
+eval "$($HOME/miniconda/bin/conda shell.bash hook)"
+conda init
+
+ conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+
+
+# 5. Reload shell to apply changes
+source ~/.bashrc
+
+
+git clone https://github.com/tejdiv/partnr-planner.git
+cd partnr-planner
+
 
 ### Create and activate Conda environment
 ```bash
@@ -19,6 +42,14 @@ git submodule update --init --recursive
 ```bash
 # Adjust the cuda version depending on your hardware stack
 conda install pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 pytorch-cuda=12.4 -c pytorch -c nvidia -y
+
+# Fix MKL compatibility issue (PyTorch requires MKL < 2024.1)
+# This prevents "undefined symbol: iJIT_NotifyEvent" error
+conda install "mkl<2024.1" "intel-openmp<2024.1" -y
+
+# Verify PyTorch works
+python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+
 # Install habitat-sim version 0.3.3
 conda install habitat-sim=0.3.3 withbullet headless -c conda-forge -c aihabitat -y
 # NOTE: If the above fails, packages may not be available for your system. Install from source (see https://github.com/facebookresearch/habitat-sim).
@@ -28,6 +59,21 @@ pip install -e ./third_party/transformers-CFG
 pip install -r requirements.txt
 ```
 If you have issues with library linking make sure that the conda libraries are in your LD_LIBRARY_PATH (e.g `export LD_LIBRARY_PATH=/path/to/anaconda/envs/myenv/lib:$LD_LIBRARY_PATH`)
+
+### Install NVIDIA OpenGL/EGL libraries (Lambda Labs and headless GPU servers only)
+```bash
+# Required for running Habitat-Sim on headless GPU servers like Lambda Labs
+# Check your driver version first with: nvidia-smi
+# Then install the matching OpenGL libraries (replace 570 with your driver version)
+sudo apt-get update
+sudo apt-get install -y libnvidia-gl-570-server libegl1 libgl1-mesa-glx libopengl0 git-lfs
+
+git lfs install
+# Reboot to sync driver and library versions
+sudo reboot
+```
+
+After reboot, reconnect and reactivate your conda environment before continuing.
 
 ### Download datasets
 ```bash
@@ -84,6 +130,17 @@ pip install -e .
 ```bash
 # Add the following to your ~/.bashrc file
 export OPENAI_API_KEY=...
+```
+
+### Running the HITL server (Lambda Labs and headless GPU servers)
+```bash
+# Set the EGL vendor library path (required on headless GPU servers)
+export __EGL_VENDOR_LIBRARY_FILENAMES=~/partnr-planner/egl_vendor/10_nvidia.json
+export MAGNUM_LOG="quiet"
+export HABITAT_SIM_LOG="quiet"
+
+# Run the server
+python habitat_llm/server/hitl_server.py
 ```
 
 ### Run the tests
